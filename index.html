@@ -391,7 +391,7 @@ $("#resetBtn").addEventListener("click", ()=>showSetup(""));
 const fromHash = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase();
 if(fromHash.length >= 8){ store("garageCode", fromHash); history.replaceState(null, "", location.pathname); }
 code = load("garageCode"); me = load("myName");
-if(code && me) start(); else showSetup("");
+if(code) start(); else showSetup("");
 setInterval(()=>{ if(!editing && code) render(); }, 60000);
 </script>
 </body>
