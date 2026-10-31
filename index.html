@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f5f8b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gdje je auto">
+<title>Gdje je auto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow column of car "level signs" with a mini floor plan, like garage wayfinding */
+:root{
+  --bg:#eceeef; --surface:#ffffff; --fg:#1d2226; --muted:#5f6a72; --line:#c9d0d4; --zone:#e3e7e9;
+  --sign:#f2b705; --sign-ink:#1d2226; --accent:#1f5f8b; --warn:#b4541a;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#15191c; --surface:#1f2428; --fg:#e8ecee; --muted:#9aa5ad; --line:#3a434a; --zone:#2a3136;
+  --sign:#f2b705; --sign-ink:#15191c; --accent:#7db8e0; --warn:#f0a06a; color-scheme:dark}}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+.wrap{max-width:560px;margin:0 auto;padding-block:20px 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:center;gap:12px}
+.pmark{width:40px;height:40px;border-radius:8px;background:var(--accent);color:var(--bg);
+  font:800 28px/40px var(--display);text-align:center;flex:none}
+h1{font:700 30px/1 var(--display);margin:0;letter-spacing:.01em}
+.status{font-size:13px;color:var(--muted);min-height:1.2em}
+.status.warn{color:var(--warn)}
+
+.car,.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel{padding:16px;display:flex;flex-direction:column;gap:14px}
+.panel h2{font:700 22px/1.1 var(--display);margin:0}
+.panel p{margin:0;color:var(--muted)}
+.car-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.car-name{font:700 22px/1.1 var(--display);text-transform:uppercase;letter-spacing:.04em;min-width:0;overflow-wrap:anywhere}
+.when{font-size:13px;color:var(--muted);text-align:right}
+.car-body{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px}
+.sign{width:84px;aspect-ratio:1;max-width:100%;background:var(--sign);color:var(--sign-ink);border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:2px}
+.sign small{font:700 11px var(--display);letter-spacing:.14em;text-transform:uppercase}
+.sign b{font:800 46px var(--display);font-variant-numeric:tabular-nums}
+.sign.empty{background:transparent;border:2px dashed var(--line);color:var(--muted)}
+.details{min-width:0;display:flex;flex-direction:column;gap:2px}
+.lbl{font:600 12px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.spot{font:700 24px/1.1 var(--display);overflow-wrap:anywhere}
+.zone-txt{font-weight:600}
+.note{color:var(--muted);overflow-wrap:anywhere;font-size:15px}
+.empty-msg{color:var(--muted)}
+.mini{width:70px;flex:none}
+.car-actions{padding:0 16px 16px}
+@media (max-width:400px){.car-body{grid-template-columns:auto 1fr}.mini{grid-column:1/-1;width:100%;max-width:150px;justify-self:center}}
+
+.plan{display:block;width:100%;height:auto}
+.plan .z{fill:var(--zone);stroke:var(--line);stroke-width:1.5}
+.plan .z.on{fill:var(--sign)}
+.plan .zl{fill:var(--muted);font:700 11px var(--display);letter-spacing:.06em;text-anchor:middle;pointer-events:none}
+.plan .z.on + .zl{fill:var(--sign-ink)}
+.plan .st{fill:var(--surface);stroke:var(--fg);stroke-width:1.5}
+.plan .st.on{fill:var(--accent);stroke:var(--accent)}
+.plan .stl{fill:var(--fg);font:700 10px var(--display);text-anchor:middle;pointer-events:none}
+.plan .st.on + .stl{fill:var(--surface)}
+.plan .edge{fill:var(--muted);font:600 9px var(--display);letter-spacing:.12em;text-anchor:middle;text-transform:uppercase}
+.plan [role=button]{cursor:pointer}
+.plan [role=button]:focus{outline:none}
+.plan [role=button]:focus-visible{stroke:var(--accent);stroke-width:3}
+
+button{font:600 16px var(--body);border-radius:8px;cursor:pointer;min-height:44px;padding:0 16px}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--surface);border:0;width:100%}
+.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.link{background:none;border:0;color:var(--muted);text-decoration:underline;min-height:32px;padding:0;font-size:14px;font-weight:500}
+button:disabled{opacity:.5;cursor:default}
+
+form{display:flex;flex-direction:column;gap:14px;padding:16px;border-top:1px solid var(--line)}
+.panel form{padding:0;border:0}
+.floors{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.floors button{background:var(--bg);border:2px solid var(--line);color:var(--fg);min-height:60px;padding:4px 0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.floors button b{font:800 26px var(--display)}
+.floors button small{font:600 11px var(--display);letter-spacing:.08em;text-transform:uppercase}
+.floors button[aria-pressed="true"]{background:var(--sign);border-color:var(--sign);color:var(--sign-ink)}
+.plan-pick{max-width:240px;width:100%;margin:0 auto}
+.pick-hint{font-size:14px;color:var(--muted);text-align:center;margin:0}
+label{display:flex;flex-direction:column;gap:6px}
+input[type=text]{font:500 17px var(--body);padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row .primary{flex:1;width:auto}
+.err{color:var(--warn);font-size:14px}
+footer{text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="pmark" aria-hidden="true">P</div>
+    <div>
+      <h1>Gdje je auto</h1>
+      <div class="status" id="status">Učitavam…</div>
+    </div>
+  </header>
+
+  <section class="panel" id="setup" hidden>
+    <h2>Prvo otvaranje na ovom uređaju</h2>
+    <p>Upišite kod garaže koji ste dobili i svoje ime. Uređaj će ih zapamtiti.</p>
+    <form id="setupForm">
+      <label for="codeIn"><span class="lbl">Kod garaže</span>
+        <input type="text" id="codeIn" autocomplete="off" autocapitalize="none" spellcheck="false" required></label>
+      <label for="nameIn"><span class="lbl">Vaše ime</span>
+        <input type="text" id="nameIn" maxlength="20" autocomplete="given-name" placeholder="npr. Kristina"></label>
+      <div class="err" id="setupErr" hidden></div>
+      <button class="primary" type="submit">Spremi</button>
+    </form>
+  </section>
+
+  <div id="cars"></div>
+  <footer><button class="link" id="resetBtn" type="button" hidden>Promijeni kod ili ime na ovom uređaju</button></footer>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDbIVOvopI9LbPUNcVtEoAhgnRNphRdHpQ",
+  authDomain: "parking-de1fc.firebaseapp.com",
+  projectId: "parking-de1fc",
+  storageBucket: "parking-de1fc.firebasestorage.app",
+  messagingSenderId: "658885625020",
+  appId: "1:658885625020:web:7ef7730d4c40f8b46abcb9"
+};
+const fb = getFirestore(initializeApp(firebaseConfig));
+
+const CAR_IDS = ["auto1","auto2"];
+const DEFAULT_NAMES = {auto1:"BMW", auto2:"Yaris"};
+const FLOORS = [{v:"0",sub:"Suteren"},{v:"1",sub:"Kat"},{v:"2",sub:"Kat"},{v:"3",sub:"Kat"}];
+const ZONES = {
+  LG:{txt:"lijevi gornji dio", short:"L gore"},
+  LD:{txt:"lijevi donji dio", short:"L dolje"},
+  D:{txt:"desni dio", short:"Desno"}
+};
+const STAIRS = {G:{txt:"gornje stubište"}, S:{txt:"srednje stubište"}, D:{txt:"donje stubište"}};
+const SVGNS = "http://www.w3.org/2000/svg";
+const $ = s => document.querySelector(s);
+const statusEl = $("#status");
+
+let code = "", me = "", unsub = null;
+let cars = {}, editing = null, draft = null, saving = false, errMsg = "";
+
+function store(k, v){ try{ v==null ? localStorage.removeItem(k) : localStorage.setItem(k, v); }catch(e){} }
+function load(k){ try{ return localStorage.getItem(k) || ""; }catch(e){ return ""; } }
+function setStatus(t, warn){ statusEl.textContent = t; statusEl.classList.toggle("warn", !!warn); }
+
+function ago(ms){
+  if(!ms) return "";
+  const m = Math.round((Date.now()-ms)/60000);
+  if(m < 1) return "upravo";
+  if(m < 60) return "prije " + m + " min";
+  const h = Math.round(m/60);
+  if(h < 24) return "prije " + h + " h";
+  const d = new Date(ms);
+  return d.toLocaleDateString("hr-HR",{day:"numeric",month:"numeric"}) + " " + d.toLocaleTimeString("hr-HR",{hour:"2-digit",minute:"2-digit"});
+}
+function el(tag, attrs, ...kids){
+  const e = document.createElement(tag);
+  for(const k in (attrs||{})){
+    if(k==="class") e.className = attrs[k];
+    else if(k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for(const c of kids){ if(c==null) continue; e.append(c instanceof Node ? c : document.createTextNode(String(c))); }
+  return e;
+}
+function s(tag, attrs, text){
+  const e = document.createElementNS(SVGNS, tag);
+  for(const k in (attrs||{})) e.setAttribute(k, attrs[k]);
+  if(text!=null) e.textContent = text;
+  return e;
+}
+
+/* Floor plan: left column split top/bottom, right column full height; stairs on the dividing line at top, middle, bottom. */
+function plan(zone, stair, interactive){
+  const top = interactive ? 16 : 0, h = 160;
+  const svg = s("svg",{viewBox:`-12 ${-12+top-(interactive?14:0)} 144 ${184+(interactive?28:0)}`,class:"plan",role:interactive?"group":"img",
+    "aria-label": interactive ? "Tlocrt etaže" : "Tlocrt: " + [zone&&ZONES[zone]&&ZONES[zone].txt, stair&&STAIRS[stair]&&STAIRS[stair].txt].filter(Boolean).join(", ")});
+  if(interactive){
+    svg.append(s("text",{x:60,y:top-6,class:"edge"},"gornji kraj"));
+    svg.append(s("text",{x:60,y:top+h+16,class:"edge"},"donji kraj"));
+  }
+  const rects = [
+    {id:"LG", x:0, y:top, w:60, h:h/2},
+    {id:"LD", x:0, y:top+h/2, w:60, h:h/2},
+    {id:"D", x:60, y:top, w:60, h:h}
+  ];
+  for(const r of rects){
+    const g = s("g");
+    const rect = s("rect",{x:r.x,y:r.y,width:r.w,height:r.h,class:"z"+(zone===r.id?" on":"")});
+    if(interactive) addBtn(rect, "Dio: "+ZONES[r.id].txt, zone===r.id, ()=>{ draft.zone = draft.zone===r.id ? "" : r.id; render(); });
+    g.append(rect, s("text",{x:r.x+r.w/2,y:r.y+r.h/2+(r.id==="D"?18:14),class:"zl"}, ZONES[r.id].short));
+    svg.append(g);
+  }
+  for(const k of ["G","S","D"]){
+    const y = top + (k==="G"?0:k==="S"?h/2:h);
+    const g = s("g");
+    const c = s("rect",{x:48,y:y-12,width:24,height:24,rx:5,class:"st"+(stair===k?" on":"")});
+    if(interactive) addBtn(c, STAIRS[k].txt, stair===k, ()=>{ draft.stair = draft.stair===k ? "" : k; render(); });
+    g.append(c, s("text",{x:60,y:y+4,class:"stl"}, "ST"));
+    svg.append(g);
+  }
+  return svg;
+}
+function addBtn(node, label, pressed, fn){
+  node.setAttribute("role","button"); node.setAttribute("tabindex","0");
+  node.setAttribute("aria-label", label); node.setAttribute("aria-pressed", String(pressed));
+  node.addEventListener("click", fn);
+  node.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); fn(); } });
+}
+
+function render(){
+  const root = $("#cars");
+  root.replaceChildren();
+  if(!code) return;
+  for(const id of CAR_IDS){
+    const c = cars[id] || {};
+    const name = c.name || DEFAULT_NAMES[id];
+    const has = c.floor != null && c.floor !== "";
+    const where = [c.zone && ZONES[c.zone] && ZONES[c.zone].txt, c.stair && STAIRS[c.stair] && "kod: " + STAIRS[c.stair].txt].filter(Boolean).join(" · ");
+    const card = el("section",{class:"car","aria-label":name},
+      el("div",{class:"car-head"},
+        el("div",{class:"car-name"}, name),
+        el("div",{class:"when"}, has ? ago(c.updatedAt) + (c.by ? " · " + c.by : "") : "")
+      ),
+      el("div",{class:"car-body"},
+        el("div",{class:"sign"+(has?"":" empty"),"aria-hidden":"true"},
+          el("small",{}, c.floor==="0" ? "Suteren" : "Etaža"), el("b",{}, has ? c.floor : "?")),
+        el("div",{class:"details"},
+          has ? el("span",{class:"lbl"}, "Mjesto") : null,
+          has ? el("div",{class:"spot"}, c.spot ? "Br. " + c.spot : "—") : el("div",{class:"empty-msg"}, "Još nije upisano gdje je parkiran."),
+          has && where ? el("div",{class:"zone-txt"}, where) : null,
+          has && c.note ? el("div",{class:"note"}, c.note) : null
+        ),
+        has && (c.zone || c.stair) ? el("div",{class:"mini"}, plan(c.zone, c.stair, false)) : null
+      )
+    );
+    if(editing === id) card.append(renderForm(id));
+    else card.append(el("div",{class:"car-actions"},
+      el("button",{class:"primary",type:"button",onclick:()=>openEdit(id)}, has ? "Uparkirala sam drugdje" : "Upiši gdje je parkiran")));
+    root.append(card);
+  }
+}
+
+function renderForm(id){
+  const f = el("form",{onsubmit:e=>{e.preventDefault(); save(id);}});
+  const fl = el("div",{class:"floors",role:"group","aria-label":"Etaža"});
+  FLOORS.forEach(x=>{
+    fl.append(el("button",{type:"button","aria-pressed":String(draft.floor===x.v),"aria-label":x.v==="0"?"Suteren":"Etaža "+x.v,onclick:()=>{draft.floor=x.v; render();}},
+      el("b",{}, x.v), el("small",{}, x.sub)));
+  });
+  const spot = el("input",{type:"text",id:"spot-"+id,inputmode:"numeric",placeholder:"npr. 24",maxlength:"10",autocomplete:"off"});
+  spot.value = draft.spot; spot.addEventListener("input",()=>draft.spot=spot.value);
+  const note = el("input",{type:"text",id:"note-"+id,placeholder:"npr. uz stup, blizu lifta",maxlength:"80",autocomplete:"off"});
+  note.value = draft.note; note.addEventListener("input",()=>draft.note=note.value);
+  f.append(
+    el("div",{class:"lbl"},"Etaža"), fl,
+    el("div",{class:"lbl"},"Dio garaže i najbliže stubište"),
+    el("div",{class:"plan-pick"}, plan(draft.zone, draft.stair, true)),
+    el("p",{class:"pick-hint"},"Dodirnite dio garaže, a po želji i stubište (ST)."),
+    el("label",{for:"spot-"+id}, el("span",{class:"lbl"},"Broj parking mjesta"), spot),
+    el("label",{for:"note-"+id}, el("span",{class:"lbl"},"Napomena (neobavezno)"), note),
+    errMsg ? el("div",{class:"err"}, errMsg) : null,
+    el("div",{class:"row"},
+      el("button",{class:"primary",type:"submit"}, saving ? "Spremam…" : "Spremi"),
+      el("button",{class:"ghost",type:"button",onclick:()=>{editing=null; errMsg=""; render();}}, "Odustani"))
+  );
+  if(saving) f.querySelector("[type=submit]").disabled = true;
+  return f;
+}
+
+function openEdit(id){
+  editing = id; errMsg = "";
+  draft = {floor:"", zone:"", stair:"", spot:"", note:""};
+  render();
+}
+
+async function save(id){
+  if(!draft.floor){ errMsg = "Odaberite etažu."; render(); return; }
+  saving = true; errMsg = ""; render();
+  try{
+    await setDoc(doc(fb, "garaze", code, "cars", id), {
+      name: DEFAULT_NAMES[id],
+      floor: draft.floor, zone: draft.zone, stair: draft.stair,
+      spot: draft.spot.trim(), note: draft.note.trim(),
+      by: me, updatedAt: Date.now()
+    });
+    editing = null;
+  }catch(e){
+    errMsg = e && e.code === "permission-denied"
+      ? "Kod garaže nije ispravan. Dodirnite „Promijeni kod” na dnu stranice."
+      : "Spremanje nije uspjelo. Provjerite vezu i pokušajte ponovo.";
+  }
+  saving = false; render();
+}
+
+function start(){
+  $("#setup").hidden = true;
+  $("#resetBtn").hidden = false;
+  if(unsub) unsub();
+  setStatus("Učitavam…");
+  let loaded = false;
+  const timer = setTimeout(()=>{ if(!loaded) setStatus("Ne mogu dohvatiti podatke. Provjerite internet.", true); }, 10000);
+  unsub = onSnapshot(collection(fb, "garaze", code, "cars"), snap=>{
+    const next = {};
+    snap.forEach(d=>{ next[d.id] = d.data(); });
+    cars = next;
+    if(!snap.metadata.fromCache){ loaded = true; clearTimeout(timer); setStatus("Promjene se odmah vide na svim uređajima."); }
+    if(!editing) render();
+  }, err=>{
+    clearTimeout(timer);
+    if(err && err.code === "permission-denied"){ setStatus("Kod garaže nije ispravan.", true); showSetup("Kod nije ispravan. Provjerite ga i upišite ponovo."); }
+    else setStatus("Veza je prekinuta. Osvježite stranicu.", true);
+  });
+  render();
+}
+
+function showSetup(msg){
+  if(unsub){ unsub(); unsub = null; }
+  cars = {}; render();
+  $("#setup").hidden = false;
+  $("#resetBtn").hidden = true;
+  $("#codeIn").value = code; $("#nameIn").value = me;
+  const e = $("#setupErr"); e.textContent = msg || ""; e.hidden = !msg;
+  setStatus("");
+}
+
+$("#setupForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const c = $("#codeIn").value.trim().toLowerCase();
+  if(c.length < 8){ const er = $("#setupErr"); er.textContent = "Kod ima barem 8 znakova."; er.hidden = false; return; }
+  code = c; me = $("#nameIn").value.trim();
+  store("garageCode", code); store("myName", me);
+  start();
+});
+$("#resetBtn").addEventListener("click", ()=>showSetup(""));
+
+// A shared link can carry the code: .../parking/#kod
+const fromHash = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase();
+if(fromHash.length >= 8){ store("garageCode", fromHash); history.replaceState(null, "", location.pathname); }
+code = load("garageCode"); me = load("myName");
+if(code && me) start(); else showSetup("");
+setInterval(()=>{ if(!editing && code) render(); }, 60000);
+</script>
+</body>
+</html>
