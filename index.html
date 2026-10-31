@@ -126,7 +126,7 @@ footer{text-align:center}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDbIVOvopI9LbPUNcVtEoAhgnRNphRdHpQ",
@@ -136,7 +136,14 @@ const firebaseConfig = {
   messagingSenderId: "658885625020",
   appId: "1:658885625020:web:7ef7730d4c40f8b46abcb9"
 };
-const fb = getFirestore(initializeApp(firebaseConfig));
+const app = initializeApp(firebaseConfig);
+// The console may name the database "(default)" or "default"; try both and keep the one that answers.
+// Long polling avoids the streaming connection that can hang in iPhone browsers.
+const DB_IDS = ["(default)", "default"];
+const dbs = {};
+function dbFor(id){ return dbs[id] || (dbs[id] = initializeFirestore(app, {experimentalForceLongPolling:true}, id)); }
+let dbId = "";
+let fb = null;
 
 const CAR_IDS = ["auto1","auto2"];
 const DEFAULT_NAMES = {auto1:"BMW", auto2:"Yaris"};
@@ -187,12 +194,12 @@ function s(tag, attrs, text){
 
 /* Floor plan: left column split top/bottom, right column full height; stairs on the dividing line at top, middle, bottom. */
 function plan(zone, stair, interactive){
-  const top = interactive ? 16 : 0, h = 160;
-  const svg = s("svg",{viewBox:`-12 ${-12+top-(interactive?14:0)} 144 ${184+(interactive?28:0)}`,class:"plan",role:interactive?"group":"img",
+  const top = interactive ? 32 : 0, h = 160;
+  const svg = s("svg",{viewBox: interactive ? "-12 0 144 228" : "-12 -12 144 184",class:"plan",role:interactive?"group":"img",
     "aria-label": interactive ? "Tlocrt etaže" : "Tlocrt: " + [zone&&ZONES[zone]&&ZONES[zone].txt, stair&&STAIRS[stair]&&STAIRS[stair].txt].filter(Boolean).join(", ")});
   if(interactive){
-    svg.append(s("text",{x:60,y:top-6,class:"edge"},"gornji kraj"));
-    svg.append(s("text",{x:60,y:top+h+16,class:"edge"},"donji kraj"));
+    svg.append(s("text",{x:60,y:12,class:"edge"},"gornji kraj"));
+    svg.append(s("text",{x:60,y:top+h+26,class:"edge"},"donji kraj"));
   }
   const rects = [
     {id:"LG", x:0, y:top, w:60, h:h/2},
@@ -291,6 +298,7 @@ function openEdit(id){
 
 async function save(id){
   if(!draft.floor){ errMsg = "Odaberite etažu."; render(); return; }
+  if(!fb){ errMsg = "Podaci još nisu učitani, pa spremanje nije moguće. Osvježite stranicu."; render(); return; }
   saving = true; errMsg = ""; render();
   try{
     await setDoc(doc(fb, "garaze", code, "cars", id), {
@@ -314,18 +322,48 @@ function start(){
   if(unsub) unsub();
   setStatus("Učitavam…");
   let loaded = false;
-  const timer = setTimeout(()=>{ if(!loaded) setStatus("Ne mogu dohvatiti podatke. Provjerite internet.", true); }, 10000);
-  unsub = onSnapshot(collection(fb, "garaze", code, "cars"), snap=>{
-    const next = {};
-    snap.forEach(d=>{ next[d.id] = d.data(); });
-    cars = next;
-    if(!snap.metadata.fromCache){ loaded = true; clearTimeout(timer); setStatus("Promjene se odmah vide na svim uređajima."); }
-    if(!editing) render();
-  }, err=>{
-    clearTimeout(timer);
-    if(err && err.code === "permission-denied"){ setStatus("Kod garaže nije ispravan.", true); showSetup("Kod nije ispravan. Provjerite ga i upišite ponovo."); }
-    else setStatus("Veza je prekinuta. Osvježite stranicu.", true);
-  });
+  const errors = {};
+  const subs = {};
+  const remembered = load("dbId");
+  const ids = DB_IDS.includes(remembered) ? [remembered] : DB_IDS;
+  const stopAll = ()=>{ for(const k in subs){ subs[k](); } };
+  unsub = stopAll;
+  const timer = setTimeout(()=>{
+    if(loaded) return;
+    const detail = Object.entries(errors).map(([k,v])=>k+": "+v).join(", ");
+    setStatus("Ne mogu dohvatiti podatke." + (detail ? " (" + detail + ")" : " Pokušajte osvježiti stranicu."), true);
+    if(remembered) store("dbId", null);
+  }, 12000);
+  for(const id of ids){
+    subs[id] = onSnapshot(collection(dbFor(id), "garaze", code, "cars"), snap=>{
+      if(snap.metadata.fromCache && !loaded) return;
+      if(!loaded){
+        loaded = true; clearTimeout(timer);
+        dbId = id; fb = dbFor(id); store("dbId", id);
+        for(const k in subs){ if(k!==id){ subs[k](); delete subs[k]; } }
+        setStatus("Promjene se odmah vide na svim uređajima.");
+      }
+      if(id !== dbId) return;
+      const next = {};
+      snap.forEach(d=>{ next[d.id] = d.data(); });
+      cars = next;
+      if(!editing) render();
+    }, err=>{
+      errors[id] = (err && err.code) || "greška";
+      if(err && err.code === "permission-denied" && !loaded){
+        loaded = true; clearTimeout(timer); stopAll();
+        setStatus("Kod garaže nije ispravan.", true);
+        showSetup("Kod nije ispravan. Provjerite ga i upišite ponovo.");
+        return;
+      }
+      if(id === dbId) setStatus("Veza je prekinuta. Osvježite stranicu.", true);
+      if(!loaded && Object.keys(errors).length === ids.length){
+        clearTimeout(timer);
+        setStatus("Ne mogu dohvatiti podatke (" + Object.entries(errors).map(([k,v])=>k+": "+v).join(", ") + ").", true);
+        if(remembered) store("dbId", null);
+      }
+    });
+  }
   render();
 }
 
