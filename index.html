@@ -55,7 +55,11 @@ h1{font:700 30px/1 var(--display);margin:0;letter-spacing:.01em}
 .note{color:var(--muted);overflow-wrap:anywhere;font-size:15px}
 .empty-msg{color:var(--muted)}
 .mini{width:70px;flex:none}
-.car-actions{padding:0 16px 16px}
+.car-actions{padding:0 16px 16px;display:flex;flex-direction:column;gap:8px}
+.ghost.wide{width:100%}
+.sign.out{background:transparent;border:2px solid var(--muted);color:var(--muted)}
+.sign.out b{font-size:30px;letter-spacing:.04em}
+.car.is-out .car-name{color:var(--muted)}
 @media (max-width:400px){.car-body{grid-template-columns:auto 1fr}.mini{grid-column:1/-1;width:100%;max-width:150px;justify-self:center}}
 
 .plan{display:block;width:100%;height:auto}
@@ -237,8 +241,36 @@ function render(){
   for(const id of CAR_IDS){
     const c = cars[id] || {};
     const name = c.name || DEFAULT_NAMES[id];
-    const has = c.floor != null && c.floor !== "";
+    const known = c.floor != null && c.floor !== "";
+    const out = !!c.out;
+    const has = known && !out;
     const where = [c.zone && ZONES[c.zone] && ZONES[c.zone].txt, c.stair && STAIRS[c.stair] && "kod: " + STAIRS[c.stair].txt].filter(Boolean).join(" · ");
+    if(out){
+      const last = known ? "Zadnje parkirano: " + (c.floor==="0" ? "suteren" : "etaža " + c.floor) + (c.spot ? ", br. " + c.spot : "") : "";
+      const card = el("section",{class:"car is-out","aria-label":name},
+        el("div",{class:"car-head"},
+          el("div",{class:"car-name"}, name),
+          el("div",{class:"when"}, ago(c.updatedAt) + (c.by ? " · " + c.by : ""))
+        ),
+        el("div",{class:"car-body"},
+          el("div",{class:"sign out","aria-hidden":"true"}, el("small",{}, "Nije u"), el("b",{}, "VANI")),
+          el("div",{class:"details"},
+            el("div",{class:"spot"}, "Nije u garaži"),
+            el("div",{class:"zone-txt"}, c.by ? "Uzeo/la: " + c.by : "Auto je uzeto."),
+            last ? el("div",{class:"note"}, last) : null
+          )
+        )
+      );
+      if(editing === id) card.append(renderForm(id));
+      else {
+        const acts = el("div",{class:"car-actions"},
+          el("button",{class:"primary",type:"button",onclick:()=>openEdit(id)}, "Vraćeno — upiši gdje je parkiran"));
+        if(known) acts.append(el("button",{class:"ghost wide",type:"button",onclick:()=>setOut(id,false)}, "Vraćeno na isto mjesto"));
+        card.append(acts);
+      }
+      root.append(card);
+      continue;
+    }
     const card = el("section",{class:"car","aria-label":name},
       el("div",{class:"car-head"},
         el("div",{class:"car-name"}, name),
@@ -257,8 +289,12 @@ function render(){
       )
     );
     if(editing === id) card.append(renderForm(id));
-    else card.append(el("div",{class:"car-actions"},
-      el("button",{class:"primary",type:"button",onclick:()=>openEdit(id)}, has ? "Uparkirala sam drugdje" : "Upiši gdje je parkiran")));
+    else {
+      const acts = el("div",{class:"car-actions"},
+        el("button",{class:"primary",type:"button",onclick:()=>openEdit(id)}, has ? "Uparkirala sam drugdje" : "Upiši gdje je parkiran"));
+      acts.append(el("button",{class:"ghost wide",type:"button",onclick:()=>setOut(id,true)}, "Auto je uzeto (nije u garaži)"));
+      card.append(acts);
+    }
     root.append(card);
   }
 }
@@ -305,7 +341,7 @@ async function save(id){
       name: DEFAULT_NAMES[id],
       floor: draft.floor, zone: draft.zone, stair: draft.stair,
       spot: draft.spot.trim(), note: draft.note.trim(),
-      by: me, updatedAt: Date.now()
+      out: false, by: me, updatedAt: Date.now()
     });
     editing = null;
   }catch(e){
@@ -314,6 +350,22 @@ async function save(id){
       : "Spremanje nije uspjelo. Provjerite vezu i pokušajte ponovo.";
   }
   saving = false; render();
+}
+
+// Mark a car as taken (out of the garage) or back in its last spot; keeps the last location for reference.
+async function setOut(id, out){
+  if(!fb){ setStatus("Podaci još nisu učitani. Osvježite stranicu.", true); return; }
+  const c = cars[id] || {};
+  try{
+    await setDoc(doc(fb, "garaze", code, "cars", id), {
+      name: DEFAULT_NAMES[id],
+      floor: c.floor || "", zone: c.zone || "", stair: c.stair || "",
+      spot: c.spot || "", note: c.note || "",
+      out, by: me, updatedAt: Date.now()
+    });
+  }catch(e){
+    setStatus("Spremanje nije uspjelo. Provjerite vezu i pokušajte ponovo.", true);
+  }
 }
 
 function start(){
