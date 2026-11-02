@@ -388,7 +388,7 @@ $("#setupForm").addEventListener("submit", e=>{
 $("#resetBtn").addEventListener("click", ()=>showSetup(""));
 
 // A shared link can carry the code: .../parking/#kod
-const fromHash = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase();
+const fromHash = (decodeURIComponent(location.hash.slice(1)).trim().toLowerCase().match(/^[a-z0-9]+/) || [""])[0];
 if(fromHash.length >= 8){ store("garageCode", fromHash); history.replaceState(null, "", location.pathname); }
 code = load("garageCode"); me = load("myName");
 if(code) start(); else showSetup("");
