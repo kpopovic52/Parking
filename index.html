@@ -171,6 +171,9 @@ function load(k){ try{ return localStorage.getItem(k) || ""; }catch(e){ return "
 function setStatus(t, warn){ statusEl.textContent = t; statusEl.classList.toggle("warn", !!warn); }
 
 function ago(ms){
+  // Shortcut writes come in as Firestore timestamps or ISO strings; page writes as milliseconds.
+  if(ms && typeof ms.toMillis==="function") ms = ms.toMillis();
+  else if(typeof ms==="string") ms = Date.parse(ms);
   if(!ms) return "";
   const m = Math.round((Date.now()-ms)/60000);
   if(m < 1) return "upravo";
@@ -254,7 +257,7 @@ function render(){
       const card = el("section",{class:"car is-out","aria-label":name},
         el("div",{class:"car-head"},
           el("div",{class:"car-name"}, name),
-          el("div",{class:"when"}, ago(c.updatedAt) + (c.by ? " · " + c.by : ""))
+          el("div",{class:"when"}, ago(c.updatedAt) + (c.by ? " · " + c.by : "") + (c.auto ? " · automatski" : ""))
         ),
         el("div",{class:"car-body"},
           el("div",{class:"sign out","aria-hidden":"true"}, el("small",{}, "Nije u"), el("b",{}, "VANI")),
@@ -398,6 +401,7 @@ function start(){
         dbId = id; fb = dbFor(id); store("dbId", id);
         for(const k in subs){ if(k!==id){ subs[k](); delete subs[k]; } }
         setStatus("Promjene se odmah vide na svim uređajima.");
+        if(pendingEdit){ const pe = pendingEdit; pendingEdit = null; openEdit(pe); }
       }
       if(id !== dbId) return;
       const next = {};
@@ -444,6 +448,10 @@ $("#setupForm").addEventListener("submit", e=>{
 $("#resetBtn").addEventListener("click", ()=>showSetup(""));
 
 // A shared link can carry the code: .../parking/#kod
+// ?upis=auto1 opens the location form for that car (used by the phone shortcut after parking).
+const upisParam = new URLSearchParams(location.search).get("upis");
+let pendingEdit = CAR_IDS.includes(upisParam) ? upisParam : null;
+if(upisParam) history.replaceState(null, "", location.pathname + location.hash);
 const fromHash = (decodeURIComponent(location.hash.slice(1)).trim().toLowerCase().match(/^[a-z0-9]+/) || [""])[0];
 if(fromHash.length >= 8){ store("garageCode", fromHash); history.replaceState(null, "", location.pathname); }
 code = load("garageCode"); me = load("myName");
